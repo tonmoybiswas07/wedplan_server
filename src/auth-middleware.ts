@@ -10,6 +10,8 @@ type AuthenticatedUser = {
   id: string;
   name: string;
   email: string;
+  image?: string;
+  businessName?: string;
   role: Role;
 };
 
@@ -55,12 +57,14 @@ export const authenticateJwt: AuthHandler = async (req, res, next) => {
       id: string;
       name: string;
       email: string;
+      image?: string | null;
+      businessName?: string | null;
       role?: unknown;
       blocked?: boolean;
     }>({
       model: "user",
       where: [{ field: "id", value: payload.sub }],
-      select: ["id", "name", "email", "role", "blocked"],
+      select: ["id", "name", "email", "role", "blocked", "image", "businessName"],
     });
 
     if (!user) {
@@ -72,7 +76,7 @@ export const authenticateJwt: AuthHandler = async (req, res, next) => {
       return;
     }
 
-    res.locals.user = { id: user.id, name: user.name, email: user.email, role: user.role };
+    res.locals.user = { id: user.id, name: user.name, email: user.email, role: user.role, image: user.image ?? undefined, businessName: user.businessName ?? undefined };
     next();
   } catch (error) {
     if (error instanceof errors.JOSEError) {

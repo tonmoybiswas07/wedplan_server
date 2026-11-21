@@ -11,6 +11,8 @@ import { publicServices } from "./public-services.js";
 import { bookingRoutes } from "./bookings.js";
 import { adminUsers } from "./admin-users.js";
 import { dashboardStats } from "./dashboard-stats.js";
+import { googleAuth } from "./google-auth.js";
+import { profileRoutes } from "./profile.js";
 
 const app = express();
 const port = Number(process.env.PORT || 8000);
@@ -44,7 +46,8 @@ app.get(
   },
   authHandler ?? authUnavailable,
 );
-app.get("/api/auth/jwks", authHandler ?? authUnavailable);
+app.get(["/api/auth/jwks", "/api/auth/callback/google"], authHandler ?? authUnavailable);
+app.use("/api/auth/google", googleAuth);
 app.post(
   ["/api/auth/sign-up/email", "/api/auth/sign-in/email", "/api/auth/sign-out"],
   authHandler ?? authUnavailable,
@@ -60,6 +63,7 @@ app.use("/api/admin/users", adminUsers);
 app.use("/api/dashboard/stats", dashboardStats);
 app.use("/api/services", publicServices);
 app.use("/api/bookings", bookingRoutes);
+app.use("/api/profile", profileRoutes);
 
 
 app.get("/api/health", async (_req, res) => {
