@@ -8,6 +8,7 @@ import { moderationUpdate, serializeService, serviceId, services, type Service }
 const fields = z.object({
   title: z.string().trim().min(3, "Enter at least 3 characters.").max(100),
   category: z.string().trim().min(2, "Enter a service category.").max(60),
+  location: z.string().trim().min(2, "Enter a city or service area.").max(100).optional(),
   description: z.string().trim().min(10, "Enter at least 10 characters.").max(2000),
   price: z.preprocess((value) => typeof value === "number" ? String(value) : value, z.string().trim().regex(/^\d{1,8}(?:\.\d{1,2})?$/, "Enter a BDT amount with up to two decimal places.")
     .transform((value) => Math.round(Number(value) * 100))
@@ -16,7 +17,7 @@ const fields = z.object({
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024, files: 1, fields: 4, fieldSize: 12 * 1024 },
+  limits: { fileSize: 5 * 1024 * 1024, files: 1, fields: 5, fieldSize: 12 * 1024 },
 }).single("image");
 
 function ownedService(id: Request["params"][string], vendorId: string) {

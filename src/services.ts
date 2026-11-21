@@ -6,6 +6,7 @@ export type Service = {
   vendorId: string;
   title: string;
   category: string;
+  location?: string;
   description: string;
   priceMinor: number;
   imageUrl?: string;
