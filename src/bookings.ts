@@ -158,14 +158,23 @@ bookingRoutes.get("/", authenticateJwt, participants, async (req, res) => {
   res.json({ bookings: records.slice(0, PAGE_SIZE), hasNext: records.length > PAGE_SIZE });
 });
 
+export async function readBookingCounts(role: BookingRole, userId: string) {
+  const [counts] = await bookings.aggregate<{ total: number; pending: number; accepted: number; rejected: number }>([
+    { $match: ownership(role, userId) },
+    { $group: {
+      _id: null, total: { $sum: 1 },
+      pending: { $sum: { $cond: [{ $eq: ["$status", "pending"] }, 1, 0] } },
+      accepted: { $sum: { $cond: [{ $eq: ["$status", "accepted"] }, 1, 0] } },
+      rejected: { $sum: { $cond: [{ $eq: ["$status", "rejected"] }, 1, 0] } },
+    } },
+    { $project: { _id: 0 } },
+  ]).toArray();
+  return counts ?? { total: 0, pending: 0, accepted: 0, rejected: 0 };
+}
+
 bookingRoutes.get("/counts", authenticateJwt, participants, async (_req, res) => {
   const { id, role } = res.locals.user!;
-  const [counts] = await bookings.aggregate<{ total: number; pending: number }>([
-    { $match: ownership(role as BookingRole, id) },
-    { $group: { _id: null, total: { $sum: 1 }, pending: { $sum: { $cond: [{ $eq: ["$status", "pending"] }, 1, 0] } } } },
-    { $project: { _id: 0, total: 1, pending: 1 } },
-  ]).toArray();
-  res.json({ counts: counts ?? { total: 0, pending: 0 } });
+  res.json({ counts: await readBookingCounts(role as BookingRole, id) });
 });
 
 bookingRoutes.get("/:id", authenticateJwt, participants, async (req, res) => {

@@ -1,4 +1,4 @@
-import type { ObjectId } from "mongodb";
+import type { ClientSession, ObjectId } from "mongodb";
 import { MongoServerError } from "mongodb";
 import { client, db } from "./db.js";
 import { services } from "./services.js";
@@ -13,6 +13,13 @@ const subscriptions = db.collection<{
   status: "active" | "inactive" | "canceled";
   currentPeriodEnd: Date;
 }>("subscriptions");
+
+export async function readVendorPlan(vendorId: string, session?: ClientSession) {
+  const premium = await subscriptions.findOne({
+    _id: vendorId, plan: "premium", status: "active", currentPeriodEnd: { $gt: new Date() },
+  }, { session, projection: { _id: 1 } });
+  return premium ? "premium" : "free";
+}
 
 export async function changeAvailability(vendorId: string, id: ObjectId, isActive: boolean) {
   const filter = { _id: id, vendorId };
@@ -37,11 +44,7 @@ export async function changeAvailability(vendorId: string, id: ObjectId, isActiv
     if (service.status !== "approved") return { error: "unapproved" as const };
     if (service.isActive ?? service.active) return { service };
 
-    const premium = await subscriptions.findOne({
-      _id: vendorId, plan: "premium", status: "active", currentPeriodEnd: { $gt: new Date() },
-    }, { session, projection: { _id: 1 } });
-
-    if (!premium) {
+    if (await readVendorPlan(vendorId, session) === "free") {
       const activeCount = await services.countDocuments({
         vendorId,
         $or: [{ isActive: true }, { isActive: { $exists: false }, active: true }],
