@@ -12,4 +12,7 @@ export const payments = db.collection<{
   currency: string;
   status: "paid" | "failed";
   date: Date;
+  stripeSubscriptionId?: string;
+  stripeSessionId?: string;
+  createdAt?: Date;
 }>("transactions");

@@ -2,7 +2,7 @@ import Stripe from "stripe";
 import { ObjectId } from "mongodb";
 import { client, db } from "./db.js";
 import { billingEvents, checkoutConfirmations, payments } from "./billing-store.js";
-import { ensureVendorLock, lockVendor } from "./service-availability.js";
+import { enforceFreeAvailability, ensureVendorLock, lockVendor } from "./service-availability.js";
 import { subscriptions } from "./subscriptions.js";
 
 const key = process.env.STRIPE_SECRET_KEY?.trim();
@@ -68,7 +68,7 @@ export async function processStripeEvent(event: Stripe.Event, api: Stripe) {
     if (!Number.isFinite(period.getTime())) throw new Error("Missing Stripe billing period.");
     const paid = typeof latest === "object" && latest?.status === "paid";
     const status = subscription.status === "canceled" || subscription.status === "incomplete_expired" ? "canceled"
-      : subscription.status === "active" && paid && source.item ? "active" : "inactive";
+      : subscription.status === "active" && paid && source.item && period > new Date() ? "active" : "inactive";
 
     const current = await subscriptions.findOne({ _id: vendorId }, { session });
     if (!current?.stripeSubscriptionId || current.stripeSubscriptionId === related
@@ -80,6 +80,7 @@ export async function processStripeEvent(event: Stripe.Event, api: Stripe) {
           cancelAtPeriodEnd: subscription.cancel_at_period_end,
         }
       }, { session, upsert: true });
+      if (status !== "active") await enforceFreeAvailability(vendorId, session);
     }
 
     if (event.type === "checkout.session.completed") {
@@ -88,6 +89,10 @@ export async function processStripeEvent(event: Stripe.Event, api: Stripe) {
         await checkoutConfirmations.updateOne({ _id: checkout.id }, {
           $setOnInsert: { vendorId, subscriptionId: related },
         }, { session, upsert: true });
+        const checkoutInvoice = stripeId(checkout.invoice);
+        if (checkoutInvoice) {
+          await payments.updateOne({ _id: checkoutInvoice, vendorId }, { $set: { stripeSessionId: checkout.id } }, { session });
+        }
       }
     }
 
@@ -97,11 +102,15 @@ export async function processStripeEvent(event: Stripe.Event, api: Stripe) {
       const settled = event.type === "invoice.paid";
       if (!existing || (settled && existing.status !== "paid")) {
         const timestamp = settled ? invoice.status_transitions?.paid_at ?? event.created : event.created;
+        const checkout = invoice.billing_reason === "subscription_create"
+          ? await checkoutConfirmations.findOne({ vendorId, subscriptionId: related }, { session }) : null;
         await payments.updateOne({ _id: invoice.id }, {
           $set: {
             vendorId, plan: "premium", amount: settled ? invoice.amount_paid : invoice.amount_due,
             currency: invoice.currency, status: settled ? "paid" : "failed", date: new Date(timestamp * 1000),
-          }
+            stripeSubscriptionId: related, ...(checkout ? { stripeSessionId: checkout._id } : {}),
+          },
+          $setOnInsert: { createdAt: new Date(event.created * 1000) },
         }, { session, upsert: true });
       }
     }

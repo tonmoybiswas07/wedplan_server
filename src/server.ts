@@ -14,6 +14,7 @@ import { dashboardStats } from "./dashboard-stats.js";
 import { googleAuth } from "./google-auth.js";
 import { adminTransactions, stripeWebhook, vendorBilling } from "./billing-routes.js";
 import { profileRoutes } from "./profile.js";
+import { reconcileExpiredSubscriptions } from "./service-availability.js";
 
 const app = express();
 const port = Number(process.env.PORT || 8000);
@@ -86,6 +87,17 @@ app.get("/api/health", async (_req, res) => {
   }
 });
 
+let checkingExpiry = false;
+function checkExpiry() {
+  if (checkingExpiry) return;
+  checkingExpiry = true;
+  void reconcileExpiredSubscriptions().catch(() => {
+    console.error("Unable to reconcile expired vendor subscriptions.");
+  }).finally(() => { checkingExpiry = false; });
+}
+
 app.listen(port, () => {
   console.log(`WedPlan API running at http://localhost:${port}`);
+  checkExpiry();
+  setInterval(checkExpiry, 60_000).unref();
 });

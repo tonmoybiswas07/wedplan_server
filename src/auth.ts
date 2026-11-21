@@ -4,6 +4,7 @@ import { betterAuth } from "better-auth/minimal";
 import { jwt } from "better-auth/plugins/jwt";
 import { z } from "zod";
 import { db } from "./db.js";
+import { signupPassword } from "./signup-password.js";
 import { roles, signupRoles } from "./roles.js";
 
 const secret = process.env.BETTER_AUTH_SECRET;
@@ -36,9 +37,13 @@ export const auth = secret ? betterAuth({
   } : {},
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
-      if (ctx.path === "/sign-up/email" && !z.enum(signupRoles).safeParse(ctx.body?.role).success) {
+      if (ctx.path !== "/sign-up/email") return;
+      if (!z.enum(signupRoles).safeParse(ctx.body?.role).success) {
         throw new APIError("BAD_REQUEST", { message: "Choose Customer or Vendor." });
       }
+      const password = signupPassword.safeParse(ctx.body?.password);
+      if (!password.success) throw new APIError("BAD_REQUEST", { message: password.error.issues[0]?.message });
+
     }),
   },
   database: mongodbAdapter(db),
@@ -47,7 +52,7 @@ export const auth = secret ? betterAuth({
     jwt: { ...jwtClaims, expirationTime: "5m", definePayload: () => ({}) },
     disableSettingJwtHeader: true,
   })],
-  emailAndPassword: { enabled: true },
+  emailAndPassword: { enabled: true, minPasswordLength: 6 },
   session: { disableSessionRefresh: true },
   advanced: { cookiePrefix: "wedplan" },
   user: {

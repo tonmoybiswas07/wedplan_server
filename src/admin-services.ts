@@ -60,6 +60,15 @@ adminServices.patch("/:id/moderation", json({ limit: "2kb" }), async (req, res) 
   res.json({ service: serializeService(service) });
 });
 
+adminServices.delete("/:id", async (req, res) => {
+  const id = serviceId(req.params.id);
+  if (!id || !(await services.deleteOne({ _id: id })).deletedCount) {
+    res.status(404).json({ message: "Service not found." });
+    return;
+  }
+  res.status(204).end();
+});
+
 const errors: ErrorRequestHandler = (error, _req, res, next) => {
   if (res.headersSent) return next(error);
   if (error?.type === "entity.parse.failed" || error?.type === "entity.too.large") {

@@ -2,7 +2,7 @@ import type { ClientSession, ObjectId } from "mongodb";
 import { MongoServerError } from "mongodb";
 import { client, db } from "./db.js";
 import { services } from "./services.js";
-import { readVendorPlan } from "./subscriptions.js";
+import { readVendorPlan, subscriptions } from "./subscriptions.js";
 
 const FREE_ACTIVE_SERVICES = 3;
 const locks = db.collection<{ _id: string; version: number }>("serviceAvailabilityLocks");
@@ -17,6 +17,32 @@ export async function ensureVendorLock(vendorId: string) {
 
 export function lockVendor(vendorId: string, session: ClientSession) {
   return locks.updateOne({ _id: vendorId }, { $inc: { version: 1 } }, { session });
+}
+
+export async function enforceFreeAvailability(vendorId: string, session: ClientSession) {
+  const filter = { vendorId, status: "approved" as const,
+    $or: [{ isActive: true }, { isActive: { $exists: false }, active: true }] };
+  const keep = await services.find(filter, { session, projection: { _id: 1 } })
+    .sort({ createdAt: 1, _id: 1 }).limit(FREE_ACTIVE_SERVICES).toArray();
+  if (keep.length < FREE_ACTIVE_SERVICES) return;
+  await services.updateMany({ ...filter, _id: { $nin: keep.map(({ _id }) => _id) } }, {
+    $set: { isActive: false, updatedAt: new Date() }, $unset: { active: "" },
+  }, { session });
+}
+
+export async function reconcileExpiredSubscriptions() {
+  for await (const { _id: vendorId } of subscriptions.find({
+    plan: "premium", status: "active", currentPeriodEnd: { $lte: new Date() },
+  }, { projection: { _id: 1 } })) {
+    await ensureVendorLock(vendorId);
+    await client.withSession((session) => session.withTransaction(async () => {
+      await lockVendor(vendorId, session);
+      const expired = await subscriptions.updateOne({
+        _id: vendorId, plan: "premium", status: "active", currentPeriodEnd: { $lte: new Date() },
+      }, { $set: { status: "inactive" } }, { session });
+      if (expired.modifiedCount) await enforceFreeAvailability(vendorId, session);
+    }));
+  }
 }
 
 export async function changeAvailability(vendorId: string, id: ObjectId, isActive: boolean) {

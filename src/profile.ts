@@ -7,6 +7,7 @@ import { auth } from "./auth.js";
 import { authenticateJwt, requireRole } from "./auth-middleware.js";
 import { db } from "./db.js";
 import { imageUpload, ImageUploadError, uploadImage } from "./image-upload.js";
+import { signupPassword } from "./signup-password.js";
 import { signupRoles } from "./roles.js";
 
 const name = z.string().trim().min(2, "Enter at least two characters.").max(100, "Use 100 characters or fewer.");
@@ -17,7 +18,7 @@ const details = z.object({
 const registration = z.object({
   name,
   email: z.email(),
-  password: z.string().min(8).max(128),
+  password: signupPassword,
   role: z.enum(signupRoles),
 }).strict();
 

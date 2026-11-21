@@ -12,7 +12,18 @@ export const publicVendorLookup = {
     let: { vendorId: { $convert: { input: "$vendorId", to: "objectId", onError: null, onNull: null } } },
     pipeline: [
       { $match: { $expr: { $eq: ["$_id", "$$vendorId"] }, role: "vendor", blocked: { $ne: true } } },
-      { $project: { _id: 0, name: 1 } },
+      { $lookup: {
+        from: "subscriptions",
+        let: { vendor: { $toString: "$_id" } },
+        pipeline: [
+          { $match: { plan: "premium", status: "active", $expr: { $and: [
+            { $eq: ["$_id", "$$vendor"] }, { $gt: ["$currentPeriodEnd", "$$NOW"] },
+          ] } } },
+          { $project: { _id: 1 } },
+        ],
+        as: "paidPlan",
+      } },
+      { $project: { _id: 0, name: 1, businessName: 1, premium: { $gt: [{ $size: "$paidPlan" }, 0] } } },
     ],
     as: "vendor",
   },
@@ -21,7 +32,7 @@ export const publicVendorLookup = {
 export function readPublishedService(id: ObjectId) {
   return services.aggregate<Pick<Service, "vendorId" | "title" | "category" | "description" | "location" | "priceMinor" | "imageUrl" | "imageUrls"> & {
     id: string;
-    vendor: { name: string }[];
+    vendor: { name: string; businessName?: string; premium: boolean }[];
   }>([
     { $match: { ...publishedServiceFilter, _id: id } },
     publicVendorLookup,

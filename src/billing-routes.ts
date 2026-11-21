@@ -47,7 +47,8 @@ vendorBilling.get("/", async (req, res) => {
     res.json({
       plan: premium ? "premium" : "free",
       billingAvailable: billingConfigured && Boolean(price),
-      status: premium ? "active" : subscription?.status === "active" ? "expired" : subscription?.status ?? "inactive",
+      status: premium ? "active" : subscription && subscription.currentPeriodEnd <= new Date()
+        && (subscription.status === "active" || subscription.stripeStatus === "active") ? "expired" : subscription?.status ?? "inactive",
       cancelAtPeriodEnd: subscription?.cancelAtPeriodEnd ?? false,
       currentPeriodEnd: subscription?.currentPeriodEnd ?? null,
       awaitingPayment: !premium && Boolean(subscription?.stripeStatus && ["past_due", "unpaid", "incomplete", "paused"].includes(subscription.stripeStatus)),

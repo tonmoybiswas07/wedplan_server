@@ -1,10 +1,11 @@
 import multer from "multer";
 
-export function imageUpload(fields: number) {
-  return multer({
+export function imageUpload(fields: number, files = 1) {
+  const upload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 5 * 1024 * 1024, files: 1, fields, fieldSize: 12 * 1024 },
-  }).single("image");
+    limits: { fileSize: 5 * 1024 * 1024, files, fields, fieldSize: 12 * 1024 },
+  });
+  return files === 1 ? upload.single("image") : upload.array("image", files);
 }
 
 export class ImageUploadError extends Error {
