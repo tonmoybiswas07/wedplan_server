@@ -3,6 +3,7 @@ import { betterAuth } from "better-auth/minimal";
 import { jwt } from "better-auth/plugins/jwt";
 import { z } from "zod";
 import { db } from "./db.js";
+import { roles, signupRoles } from "./roles.js";
 
 const secret = process.env.BETTER_AUTH_SECRET;
 if (secret && secret.length < 32) {
@@ -27,9 +28,9 @@ export const auth = secret ? betterAuth({
   user: {
     additionalFields: {
       role: {
-        type: ["customer", "vendor"],
+        type: [...roles],
         required: true,
-        validator: { input: z.enum(["customer", "vendor"]) },
+        validator: { input: z.enum(signupRoles) },
       },
       blocked: { type: "boolean", input: false, required: false, defaultValue: false },
     },

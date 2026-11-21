@@ -7,7 +7,7 @@ if (!uri) {
   throw new Error("MONGODB_URI is required in .env");
 }
 
-const client = new MongoClient(uri, {
+export const client = new MongoClient(uri, {
   serverSelectionTimeoutMS: 5000,
 });
 
