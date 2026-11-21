@@ -1,9 +1,9 @@
 import { json, Router, type ErrorRequestHandler, type Request, type Response } from "express";
 import multer from "multer";
-import { ObjectId } from "mongodb";
 import { z } from "zod";
 import { authenticateJwt, requireRole } from "./auth-middleware.js";
-import { db } from "./db.js";
+import { changeAvailability } from "./service-availability.js";
+import { moderationUpdate, serializeService, serviceId, services, type Service } from "./services.js";
 
 const fields = z.object({
   title: z.string().trim().min(3, "Enter at least 3 characters.").max(100),
@@ -14,33 +14,14 @@ const fields = z.object({
     .refine((value) => value > 0, "Enter an amount greater than zero.")),
 }).strict();
 
-type Service = {
-  vendorId: string;
-  title: string;
-  category: string;
-  description: string;
-  priceMinor: number;
-  imageUrl?: string;
-  status: "pending" | "approved" | "rejected";
-  active: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-const services = db.collection<Service>("services");
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024, files: 1, fields: 4, fieldSize: 12 * 1024 },
 }).single("image");
 
-function ownedService(id: string | string[] | undefined, vendorId: string) {
-  return typeof id === "string" && /^[\da-f]{24}$/i.test(id)
-    ? { _id: new ObjectId(id), vendorId }
-    : null;
-}
-
-function serialize({ _id, vendorId: _vendorId, ...service }: Service & { _id: ObjectId }) {
-  return { id: _id.toHexString(), ...service };
+function ownedService(id: Request["params"][string], vendorId: string) {
+  const _id = serviceId(id);
+  return _id ? { _id, vendorId } : null;
 }
 
 function imageMime(bytes: Buffer) {
@@ -96,7 +77,7 @@ vendorServices.use(authenticateJwt, requireRole("vendor"));
 
 vendorServices.get("/", async (_req, res) => {
   const results = await services.find({ vendorId: res.locals.user.id }).sort({ createdAt: -1, _id: -1 }).toArray();
-  res.json({ services: results.map(serialize) });
+  res.json({ services: results.map(serializeService) });
 });
 
 vendorServices.get("/:id", async (req, res) => {
@@ -106,7 +87,7 @@ vendorServices.get("/:id", async (req, res) => {
     res.status(404).json({ message: "Service not found." });
     return;
   }
-  res.json({ service: serialize(service) });
+  res.json({ service: serializeService(service) });
 });
 
 const jsonBody = json({ limit: "32kb" });
@@ -117,10 +98,10 @@ vendorServices.post("/", jsonBody, upload, async (req, res) => {
 
   const now = new Date();
   const service: Service = {
-    ...details, vendorId: res.locals.user.id, status: "pending", active: false, createdAt: now, updatedAt: now,
+    ...details, vendorId: res.locals.user.id, status: "pending", isActive: false, createdAt: now, updatedAt: now,
   };
   const { insertedId } = await services.insertOne(service);
-  res.status(201).json({ service: serialize({ ...service, _id: insertedId }) });
+  res.status(201).json({ service: serializeService({ ...service, _id: insertedId }) });
 });
 
 vendorServices.patch("/:id", async (req, res, next) => {
@@ -135,14 +116,42 @@ vendorServices.patch("/:id", async (req, res, next) => {
   const details = await readService(req, res);
   if (!details) return;
 
+  const review = moderationUpdate("pending");
   const updated = await services.findOneAndUpdate(filter, {
-    $set: { ...details, status: "pending", active: false, updatedAt: new Date() },
+    ...review, $set: { ...details, ...review.$set },
   }, { returnDocument: "after" });
   if (!updated) {
     res.status(404).json({ message: "Service not found." });
     return;
   }
-  res.json({ service: serialize(updated) });
+  res.json({ service: serializeService(updated) });
+});
+
+const availability = z.object({ isActive: z.boolean() }).strict();
+
+vendorServices.patch("/:id/availability", jsonBody, async (req, res) => {
+  const id = serviceId(req.params.id);
+  if (!id) {
+    res.status(404).json({ message: "Service not found." });
+    return;
+  }
+  const body = availability.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ message: "Specify whether the service should be active." });
+    return;
+  }
+  const result = await changeAvailability(res.locals.user.id, id, body.data.isActive);
+  if (result.service) {
+    res.json({ service: serializeService(result.service) });
+  } else if (result.error === "missing") {
+    res.status(404).json({ message: "Service not found." });
+  } else {
+    res.status(409).json({
+      message: result.error === "limit"
+        ? "The Free plan allows 3 active services. Deactivate a service before activating another."
+        : "Only approved services can be activated.",
+    });
+  }
 });
 
 vendorServices.delete("/:id", async (req, res) => {
