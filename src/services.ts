@@ -10,6 +10,7 @@ export type Service = {
   description: string;
   priceMinor: number;
   imageUrl?: string;
+  imageUrls?: string[];
   status: (typeof serviceStatuses)[number];
   isActive?: boolean;
   active?: boolean;

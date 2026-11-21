@@ -8,6 +8,7 @@ import { db } from "./db.js";
 import { vendorServices } from "./vendor-services.js";
 import { adminServices } from "./admin-services.js";
 import { publicServices } from "./public-services.js";
+import { bookingRoutes } from "./bookings.js";
 
 const app = express();
 const port = Number(process.env.PORT || 8000);
@@ -40,6 +41,7 @@ app.get("/api/me", authenticateJwt, (_req, res) => {
 app.use("/api/vendor/services", vendorServices);
 app.use("/api/admin/services", adminServices);
 app.use("/api/services", publicServices);
+app.use("/api/bookings", bookingRoutes);
 
 
 app.get("/api/health", async (_req, res) => {

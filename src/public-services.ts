@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
 import type { Filter } from "mongodb";
-import { services, type Service } from "./services.js";
+import { authenticateJwt } from "./auth-middleware.js";
+import { publishedServiceFilter, publicVendorLookup, readPublishedService } from "./published-services.js";
+import { serviceId, services, type Service } from "./services.js";
 
 const query = z.object({
   q: z.string().trim().max(100).optional(),
@@ -26,10 +28,7 @@ publicServices.get("/", async (req, res) => {
   }
 
   const { q, category, location, sort, page, limit } = parsed.data;
-  const filter: Filter<Service> = {
-    status: "approved",
-    $or: [{ isActive: true }, { isActive: { $exists: false }, active: true }],
-  };
+  const filter: Filter<Service> = { ...publishedServiceFilter };
   if (q) filter.title = new RegExp(literal(q), "i");
   if (category) filter.category = new RegExp(`^${literal(category)}$`, "i");
   if (location) filter.location = new RegExp(literal(location), "i");
@@ -40,17 +39,7 @@ publicServices.get("/", async (req, res) => {
     const results = await services.aggregate([
       { $match: filter },
       { $sort: order },
-      {
-        $lookup: {
-          from: "user",
-          let: { vendorId: { $convert: { input: "$vendorId", to: "objectId", onError: null, onNull: null } } },
-          pipeline: [
-            { $match: { $expr: { $eq: ["$_id", "$$vendorId"] }, role: "vendor", blocked: { $ne: true } } },
-            { $project: { _id: 0, name: 1 } },
-          ],
-          as: "vendor",
-        },
-      },
+      publicVendorLookup,
       { $unwind: "$vendor" },
       { $skip: (page - 1) * limit },
       { $limit: limit + 1 },
@@ -71,5 +60,21 @@ publicServices.get("/", async (req, res) => {
     res.json({ services: results.slice(0, limit), hasNext: results.length > limit });
   } catch {
     res.status(503).json({ message: "Listings are temporarily unavailable." });
+  }
+});
+
+
+publicServices.get("/:id", authenticateJwt, async (req, res) => {
+  const id = serviceId(req.params.id);
+  try {
+    const listing = id && await readPublishedService(id);
+    if (!listing || !listing.vendor[0]) {
+      res.status(404).json({ message: "This service is unavailable." });
+      return;
+    }
+    const { vendor, vendorId: _vendorId, ...service } = listing;
+    res.json({ service: { ...service, vendor: vendor[0] } });
+  } catch {
+    res.status(503).json({ message: "Service details are temporarily unavailable." });
   }
 });
