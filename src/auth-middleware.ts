@@ -83,13 +83,13 @@ export const authenticateJwt: AuthHandler = async (req, res, next) => {
   }
 };
 
-export function requireRole(role: Role): AuthHandler {
+export function requireRole(...roles: Role[]): AuthHandler {
   return (_req, res, next) => {
     if (!res.locals.user) {
       unauthorized(res);
       return;
     }
-    if (res.locals.user.role !== role) {
+    if (!roles.includes(res.locals.user.role)) {
       res.status(403).json({ error: "Forbidden" });
       return;
     }
