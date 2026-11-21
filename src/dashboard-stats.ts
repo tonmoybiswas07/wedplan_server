@@ -3,7 +3,8 @@ import { authenticateJwt, requireRole } from "./auth-middleware.js";
 import { adminUserCounts } from "./admin-users.js";
 import { readBookingCounts } from "./bookings.js";
 import { publishedServiceFilter } from "./published-services.js";
-import { readVendorPlan } from "./service-availability.js";
+import { readVendorPlan } from "./subscriptions.js";
+import { payments } from "./billing-store.js";
 import { services } from "./services.js";
 
 export const dashboardStats = Router();
@@ -26,12 +27,13 @@ dashboardStats.get("/", authenticateJwt, requireRole("customer", "vendor", "admi
       return;
     }
 
-    const [users, totalServices, pendingServices] = await Promise.all([
+    const [users, totalServices, pendingServices, transactions] = await Promise.all([
       adminUserCounts(),
       services.countDocuments(),
       services.countDocuments({ status: "pending" }),
+      payments.countDocuments(),
     ]);
-    res.json({ stats: { ...users, totalServices, pendingServices, transactions: null } });
+    res.json({ stats: { ...users, totalServices, pendingServices, transactions } });
   } catch {
     res.status(503).json({ message: "Dashboard statistics are temporarily unavailable." });
   }

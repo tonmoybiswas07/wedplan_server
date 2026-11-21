@@ -12,6 +12,7 @@ import { bookingRoutes } from "./bookings.js";
 import { adminUsers } from "./admin-users.js";
 import { dashboardStats } from "./dashboard-stats.js";
 import { googleAuth } from "./google-auth.js";
+import { adminTransactions, stripeWebhook, vendorBilling } from "./billing-routes.js";
 import { profileRoutes } from "./profile.js";
 
 const app = express();
@@ -64,6 +65,9 @@ app.use("/api/dashboard/stats", dashboardStats);
 app.use("/api/services", publicServices);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/profile", profileRoutes);
+app.use("/api/stripe/webhook", stripeWebhook);
+app.use("/api/vendor/billing", vendorBilling);
+app.use("/api/admin/transactions", adminTransactions);
 
 
 app.get("/api/health", async (_req, res) => {
