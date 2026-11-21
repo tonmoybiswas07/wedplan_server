@@ -12,7 +12,10 @@ if (secret && secret.length < 32) {
   throw new Error("BETTER_AUTH_SECRET must contain at least 32 characters.");
 }
 
-const baseURL = process.env.BETTER_AUTH_URL || `http://localhost:${process.env.PORT || 8000}`;
+const productionDomain = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+const baseURL = process.env.BETTER_AUTH_URL || (
+  productionDomain ? `https://${productionDomain}` : `http://localhost:${process.env.PORT || 8000}`
+);
 export const jwtClaims = { issuer: new URL(baseURL).origin, audience: new URL(baseURL).origin };
 
 export const clientOrigin = new URL(process.env.CLIENT_URL || "http://localhost:3000").origin;
