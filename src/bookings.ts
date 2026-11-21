@@ -159,17 +159,23 @@ bookingRoutes.get("/", authenticateJwt, participants, async (req, res) => {
 });
 
 export async function readBookingCounts(role: BookingRole, userId: string) {
-  const [counts] = await bookings.aggregate<{ total: number; pending: number; accepted: number; rejected: number }>([
+  const [counts] = await bookings.aggregate<{
+    total: number; pending: number; accepted: number; rejected: number;
+    cancelled: number; confirmed: number; completed: number;
+  }>([
     { $match: ownership(role, userId) },
     { $group: {
       _id: null, total: { $sum: 1 },
       pending: { $sum: { $cond: [{ $eq: ["$status", "pending"] }, 1, 0] } },
       accepted: { $sum: { $cond: [{ $eq: ["$status", "accepted"] }, 1, 0] } },
       rejected: { $sum: { $cond: [{ $eq: ["$status", "rejected"] }, 1, 0] } },
+      cancelled: { $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0] } },
+      confirmed: { $sum: { $cond: [{ $eq: ["$status", "confirmed"] }, 1, 0] } },
+      completed: { $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] } },
     } },
     { $project: { _id: 0 } },
   ]).toArray();
-  return counts ?? { total: 0, pending: 0, accepted: 0, rejected: 0 };
+  return counts ?? { total: 0, pending: 0, accepted: 0, rejected: 0, cancelled: 0, confirmed: 0, completed: 0 };
 }
 
 bookingRoutes.get("/counts", authenticateJwt, participants, async (_req, res) => {

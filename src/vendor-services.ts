@@ -7,7 +7,7 @@ import { canonicalCategory } from "./categories.js";
 import { changeAvailability } from "./service-availability.js";
 import { moderationUpdate, serializeService, serviceId, services, type Service } from "./services.js";
 
-const fields = z.object({
+export const vendorServiceFields = z.object({
   title: z.string().trim().min(3, "Enter at least 3 characters.").max(100),
   category: z.string().trim().transform(canonicalCategory).refine((value) => value !== undefined, "Choose an assignment category."),
   location: z.string().trim().min(2, "Enter a city or service area.").max(100),
@@ -25,7 +25,7 @@ function ownedService(id: Request["params"][string], vendorId: string) {
 }
 
 async function readService(req: Request, res: Response, requireImage: boolean) {
-  const parsed = fields.safeParse(req.body);
+  const parsed = vendorServiceFields.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ message: "Check the service details.", errors: z.flattenError(parsed.error).fieldErrors });
     return;
