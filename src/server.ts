@@ -5,6 +5,7 @@ import { toNodeHandler } from "better-auth/node";
 import { auth } from "./auth.js";
 import { authenticateJwt } from "./auth-middleware.js";
 import { db } from "./db.js";
+import { vendorServices } from "./vendor-services.js";
 
 const app = express();
 const port = Number(process.env.PORT || 8000);
@@ -33,6 +34,9 @@ app.post(
 app.get("/api/me", authenticateJwt, (_req, res) => {
   res.json({ user: res.locals.user });
 });
+
+app.use("/api/vendor/services", vendorServices);
+
 
 app.get("/api/health", async (_req, res) => {
   try {
